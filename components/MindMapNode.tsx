@@ -121,7 +121,7 @@ export const MindMapNodeComponent: React.FC<Props> = ({
         height={height}
         className="pointer-events-none" 
       >
-        <div className="w-full h-full flex items-center justify-center">
+        <div className="w-full h-full">
           {isEditing ? (
              <textarea
                ref={inputRef}
@@ -138,7 +138,7 @@ export const MindMapNodeComponent: React.FC<Props> = ({
              />
           ) : (
             <div 
-                className={`w-full ${styles.text}`}
+                className={`w-full h-full ${styles.text}`}
                 style={textStyle}
             >
               {node.text}
