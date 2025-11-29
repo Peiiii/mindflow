@@ -6,6 +6,7 @@ import { Toolbar } from './components/Toolbar';
 import { Instructions } from './components/Instructions';
 import { CanvasControls } from './components/CanvasControls';
 import { ThemeMode, THEMES, ViewportState, MindMapNode } from './types';
+import { NODE_WIDTH, NODE_HEIGHT } from './constants';
 
 function App() {
   const {
@@ -25,7 +26,7 @@ function App() {
     canRedo
   } = useMindMap();
 
-  const [theme, setTheme] = useState<ThemeMode>(ThemeMode.DARK);
+  const [theme, setTheme] = useState<ThemeMode>(ThemeMode.LIGHT);
   const [viewport, setViewport] = useState<ViewportState>({ x: window.innerWidth / 2, y: window.innerHeight / 2, scale: 1 });
   const [isPanning, setIsPanning] = useState(false);
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
@@ -174,7 +175,71 @@ function App() {
   // Canvas Control Handlers
   const handleZoomIn = () => setViewport(prev => ({ ...prev, scale: Math.min(prev.scale * 1.2, 5) }));
   const handleZoomOut = () => setViewport(prev => ({ ...prev, scale: Math.max(prev.scale / 1.2, 0.1) }));
-  const handleResetView = () => setViewport({ x: window.innerWidth / 2, y: window.innerHeight / 2, scale: 1 });
+  
+  const handleResetView = useCallback(() => {
+    // Fit to screen logic
+    const allNodes = Object.values(nodes) as MindMapNode[];
+    const visibleNodes = allNodes.filter(node => {
+        // Must have coordinates
+        if (node.x === undefined || node.y === undefined) return false;
+        
+        // Check ancestry for collapsed state
+        let current = node;
+        while (current.parentId) {
+            const parent = nodes[current.parentId];
+            if (!parent || !parent.isExpanded) return false;
+            current = parent;
+        }
+        return true;
+    });
+
+    if (visibleNodes.length === 0) {
+        setViewport({ x: window.innerWidth / 2, y: window.innerHeight / 2, scale: 1 });
+        return;
+    }
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+
+    visibleNodes.forEach(node => {
+        if (node.x === undefined || node.y === undefined) return;
+        
+        const x = node.x;
+        const y = node.y;
+        
+        if (x - NODE_WIDTH / 2 < minX) minX = x - NODE_WIDTH / 2;
+        if (x + NODE_WIDTH / 2 > maxX) maxX = x + NODE_WIDTH / 2;
+        if (y - NODE_HEIGHT / 2 < minY) minY = y - NODE_HEIGHT / 2;
+        if (y + NODE_HEIGHT / 2 > maxY) maxY = y + NODE_HEIGHT / 2;
+    });
+
+    const padding = 80;
+    const width = Math.max(maxX - minX, NODE_WIDTH);
+    const height = Math.max(maxY - minY, NODE_HEIGHT);
+    
+    const availableWidth = window.innerWidth - padding * 2;
+    const availableHeight = window.innerHeight - padding * 2;
+    
+    const scaleX = availableWidth / width;
+    const scaleY = availableHeight / height;
+    
+    // Choose the smaller scale to fit both dimensions, clamped for usability
+    let fitScale = Math.min(scaleX, scaleY);
+    fitScale = Math.min(fitScale, 1.2); // Don't zoom in too much
+    fitScale = Math.max(fitScale, 0.2); // Don't zoom out too much
+
+    const centerX = minX + width / 2;
+    const centerY = minY + height / 2;
+
+    // Calculate viewport position to center the content
+    // viewportX + centerX * scale = screenWidth / 2
+    const newX = (window.innerWidth / 2) - (centerX * fitScale);
+    const newY = (window.innerHeight / 2) - (centerY * fitScale);
+
+    setViewport({ x: newX, y: newY, scale: fitScale });
+  }, [nodes]);
 
   const styles = THEMES[theme];
 
