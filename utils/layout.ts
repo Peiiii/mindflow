@@ -108,6 +108,7 @@ export const computeLayout = (data: MindMapData, drafts?: Record<string, string>
     totalChildrenHeight += (node.children.length - 1) * VERTICAL_SPACING;
 
     // Subtree height is max of node's own height or its children's total height
+    // This ensures sibling spacing in the parent's layout accounts for the larger of the two
     (node as LayoutNode).subtreeHeight = Math.max(height, totalChildrenHeight);
     return (node as LayoutNode).subtreeHeight;
   };
@@ -124,13 +125,23 @@ export const computeLayout = (data: MindMapData, drafts?: Record<string, string>
 
     if (!node.children || node.children.length === 0 || !node.isExpanded) return;
 
-    let currentY = y - node.subtreeHeight / 2;
+    // Calculate exact height of the children block to center it relative to the parent
+    // We re-calculate this instead of using node.subtreeHeight because node.subtreeHeight
+    // might be inflated by the node's own height (if the node is taller than its children).
+    let childrenBlockHeight = 0;
+    node.children.forEach(childId => {
+      childrenBlockHeight += (nodes[childId] as LayoutNode).subtreeHeight;
+    });
+    childrenBlockHeight += (node.children.length - 1) * VERTICAL_SPACING;
+
+    // Center the children block vertically relative to the parent's center (y)
+    let currentY = y - childrenBlockHeight / 2;
 
     node.children.forEach(childId => {
       const child = nodes[childId] as LayoutNode;
       const childHeight = child.subtreeHeight;
       
-      // Center the child vertically within its allocated slot
+      // Center the child vertically within its allocated slot in the children block
       const childY = currentY + childHeight / 2;
       
       // Calculate X position dynamically based on parent and child widths
