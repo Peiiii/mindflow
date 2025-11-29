@@ -1,6 +1,7 @@
+
 import React from 'react';
 import { MindMapNode, ThemeMode, THEMES } from '../types';
-import { NODE_WIDTH } from '../constants';
+import { MIN_NODE_WIDTH } from '../constants';
 
 interface Props {
   source: MindMapNode;
@@ -13,10 +14,13 @@ export const MindMapEdge: React.FC<Props> = ({ source, target, theme }) => {
 
   const styles = THEMES[theme];
 
-  // Bezier Calculation for Horizontal Layout
-  const startX = source.x + NODE_WIDTH / 2;
+  // Bezier Calculation with dynamic widths
+  const sourceWidth = source.width || MIN_NODE_WIDTH;
+  const targetWidth = target.width || MIN_NODE_WIDTH;
+
+  const startX = source.x + sourceWidth / 2;
   const startY = source.y;
-  const endX = target.x - NODE_WIDTH / 2;
+  const endX = target.x - targetWidth / 2;
   const endY = target.y;
 
   const controlPointOffset = (endX - startX) / 2;

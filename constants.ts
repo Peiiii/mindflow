@@ -1,8 +1,18 @@
-export const NODE_WIDTH = 180;
-export const NODE_HEIGHT = 50;
-export const HORIZONTAL_SPACING = 240;
+
+export const MAX_NODE_WIDTH = 400;
+export const MIN_NODE_WIDTH = 50;
+export const MIN_NODE_HEIGHT = 40;
+export const HORIZONTAL_GAP = 60;
 export const VERTICAL_SPACING = 20;
 export const ANIMATION_DURATION = 0.3;
+
+export const NODE_STYLES = {
+  fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif',
+  fontSize: '14px',
+  fontWeight: '500',
+  lineHeight: '1.5',
+  padding: '8px 12px',
+};
 
 export const INITIAL_DATA = {
   rootId: 'root',

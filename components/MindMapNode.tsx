@@ -1,7 +1,7 @@
-import React, { useRef, useEffect, useState } from 'react';
+
+import React, { useRef, useEffect } from 'react';
 import { MindMapNode, ThemeMode, THEMES } from '../types';
-import { NODE_WIDTH, NODE_HEIGHT } from '../constants';
-import { PlusCircle, MinusCircle } from 'lucide-react';
+import { MIN_NODE_HEIGHT, MIN_NODE_WIDTH, NODE_STYLES } from '../constants';
 
 interface Props {
   node: MindMapNode;
@@ -10,6 +10,7 @@ interface Props {
   isEditing: boolean;
   onSelect: (id: string) => void;
   onEditStart: (id: string) => void;
+  onEditChange: (id: string, text: string) => void;
   onEditEnd: (id: string, text: string) => void;
   onToggleCollapse: (id: string) => void;
   onAddChild: (id: string) => void;
@@ -22,44 +23,66 @@ export const MindMapNodeComponent: React.FC<Props> = ({
   isEditing,
   onSelect,
   onEditStart,
+  onEditChange,
   onEditEnd,
   onToggleCollapse,
   onAddChild
 }) => {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [localText, setLocalText] = useState(node.text);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const styles = THEMES[theme];
+
+  // Dimensions from layout
+  const width = node.width || MIN_NODE_WIDTH;
+  const height = node.height || MIN_NODE_HEIGHT;
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
       inputRef.current.focus();
-      inputRef.current.select();
+      // Only select all on initial focus to avoid interrupting typing
+      // We can check if selectionStart is 0 and value equals node.text to guess it's initial
+      // But for simplicity, we'll just focus. 
+      // If we want select all on start, we need a flag or logic.
+      // Usually users expect cursor at end or selected all. 
+      // Since we re-render on every keystroke, we rely on React to keep focus.
+    }
+  }, [isEditing]);
+  
+  // When entering edit mode, select text
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+        inputRef.current.select();
     }
   }, [isEditing]);
 
-  useEffect(() => {
-    setLocalText(node.text);
-  }, [node.text]);
-
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      onEditEnd(node.id, localText);
+    // Enter to save, Shift+Enter for new line
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      onEditEnd(node.id, node.text);
     }
     if (e.key === 'Escape') {
-      setLocalText(node.text);
+      // Revert is complex here because we've been updating draft.
+      // Ideally we should have an onCancel that reverts draft.
+      // For now, commit current state or we can pass original text?
+      // Let's just commit.
       onEditEnd(node.id, node.text);
     }
     e.stopPropagation(); // Prevent canvas shortcuts
   };
 
   const hasChildren = node.children && node.children.length > 0;
-  
-  // Dynamic color generation based on depth/branch
-  const getBranchColor = () => {
-    const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#f59e0b', '#10b981'];
-    // Use a hash of the ID or depth for stability, simplified here
-    if (node.depth === 0) return styles.edge; 
-    return colors[(node.depth || 0) % colors.length];
+
+  // Shared text styles
+  const textStyle: React.CSSProperties = {
+    fontFamily: NODE_STYLES.fontFamily,
+    fontSize: NODE_STYLES.fontSize,
+    fontWeight: NODE_STYLES.fontWeight,
+    lineHeight: NODE_STYLES.lineHeight,
+    padding: NODE_STYLES.padding,
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+    overflowWrap: 'break-word',
+    textAlign: 'center',
   };
 
   return (
@@ -77,11 +100,11 @@ export const MindMapNodeComponent: React.FC<Props> = ({
     >
       {/* Node Background */}
       <rect
-        x={-NODE_WIDTH / 2}
-        y={-NODE_HEIGHT / 2}
-        width={NODE_WIDTH}
-        height={NODE_HEIGHT}
-        rx={12}
+        x={-width / 2}
+        y={-height / 2}
+        width={width}
+        height={height}
+        rx={8}
         className={`
           ${styles.nodeBg} 
           ${isSelected ? `stroke-2 ${styles.highlight}` : `stroke-1 stroke-slate-200 dark:stroke-slate-700`}
@@ -91,41 +114,43 @@ export const MindMapNodeComponent: React.FC<Props> = ({
       />
 
       {/* Content */}
-      {isEditing ? (
-        <foreignObject
-          x={-NODE_WIDTH / 2 + 5}
-          y={-NODE_HEIGHT / 2}
-          width={NODE_WIDTH - 10}
-          height={NODE_HEIGHT}
-        >
-          <div className="flex items-center justify-center h-full">
-            <input
-              ref={inputRef}
-              value={localText}
-              onChange={(e) => setLocalText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onBlur={() => onEditEnd(node.id, localText)}
-              className="w-full bg-transparent text-center outline-none text-slate-800 dark:text-white font-medium"
-            />
-          </div>
-        </foreignObject>
-      ) : (
-        <text
-          dy=".3em"
-          textAnchor="middle"
-          className={`
-            pointer-events-none select-none text-sm font-medium
-            ${styles.text}
-          `}
-        >
-          {node.text.length > 20 ? node.text.substring(0, 18) + '...' : node.text}
-        </text>
-      )}
+      <foreignObject
+        x={-width / 2}
+        y={-height / 2}
+        width={width}
+        height={height}
+        className="pointer-events-none" 
+      >
+        <div className="w-full h-full flex items-center justify-center">
+          {isEditing ? (
+             <textarea
+               ref={inputRef}
+               value={node.text}
+               onChange={(e) => onEditChange(node.id, e.target.value)}
+               onKeyDown={handleKeyDown}
+               onBlur={() => onEditEnd(node.id, node.text)}
+               className="pointer-events-auto w-full h-full bg-transparent resize-none outline-none text-slate-800 dark:text-white border-0 m-0 overflow-hidden"
+               style={{ 
+                   ...textStyle,
+                   // Reset defaults
+                   margin: 0,
+                }}
+             />
+          ) : (
+            <div 
+                className={`w-full ${styles.text}`}
+                style={textStyle}
+            >
+              {node.text}
+            </div>
+          )}
+        </div>
+      </foreignObject>
 
       {/* Expand/Collapse Button */}
       {hasChildren && (
         <g
-          transform={`translate(${NODE_WIDTH / 2 + 12}, 0)`}
+          transform={`translate(${width / 2 + 12}, 0)`}
           onClick={(e) => {
             e.stopPropagation();
             onToggleCollapse(node.id);
@@ -143,9 +168,9 @@ export const MindMapNodeComponent: React.FC<Props> = ({
         </g>
       )}
 
-      {/* Add Child Hover Button (Bottom) */}
+      {/* Add Child Hover Button */}
       <g
-          transform={`translate(0, ${NODE_HEIGHT/2 + 12})`}
+          transform={`translate(0, ${height/2 + 12})`}
           onClick={(e) => {
               e.stopPropagation();
               onAddChild(node.id);

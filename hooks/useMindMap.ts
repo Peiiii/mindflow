@@ -1,4 +1,5 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+
+import { useState, useCallback, useMemo } from 'react';
 import { MindMapData, MindMapNode, NodeId, HistoryState } from '../types';
 import { INITIAL_DATA } from '../constants';
 import { computeLayout } from '../utils/layout';
@@ -13,11 +14,12 @@ export const useMindMap = () => {
 
   const [selectedId, setSelectedId] = useState<NodeId | null>(null);
   const [editingId, setEditingId] = useState<NodeId | null>(null);
+  const [drafts, setDrafts] = useState<Record<NodeId, string>>({});
 
-  // Compute layout whenever the tree structure changes
+  // Compute layout whenever the tree structure changes or drafts change
   const layoutNodes = useMemo(() => {
-    return computeLayout(history.present);
-  }, [history.present]);
+    return computeLayout(history.present, drafts);
+  }, [history.present, drafts]);
 
   const pushState = useCallback((newData: MindMapData) => {
     setHistory(curr => ({
@@ -61,6 +63,17 @@ export const useMindMap = () => {
       pushState({ ...history.present, nodes: newNodes });
     }
   }, [history.present, pushState]);
+
+  const updateDraft = useCallback((id: NodeId, text: string | null) => {
+    setDrafts(prev => {
+        if (text === null) {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        }
+        return { ...prev, [id]: text };
+    });
+  }, []);
 
   const toggleCollapse = useCallback((id: NodeId) => {
     const newNodes = { ...history.present.nodes };
@@ -154,6 +167,7 @@ export const useMindMap = () => {
     editingId,
     setEditingId,
     updateNodeText,
+    updateDraft,
     addChild,
     addSibling,
     deleteNode,

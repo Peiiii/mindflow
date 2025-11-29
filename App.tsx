@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useMindMap } from './hooks/useMindMap';
 import { MindMapNodeComponent } from './components/MindMapNode';
@@ -6,7 +7,7 @@ import { Toolbar } from './components/Toolbar';
 import { Instructions } from './components/Instructions';
 import { CanvasControls } from './components/CanvasControls';
 import { ThemeMode, THEMES, ViewportState, MindMapNode } from './types';
-import { NODE_WIDTH, NODE_HEIGHT } from './constants';
+import { MAX_NODE_WIDTH, MIN_NODE_HEIGHT } from './constants';
 
 function App() {
   const {
@@ -16,6 +17,7 @@ function App() {
     editingId,
     setEditingId,
     updateNodeText,
+    updateDraft,
     addChild,
     addSibling,
     deleteNode,
@@ -104,8 +106,7 @@ function App() {
       } else if (direction === 'right' && current.children.length > 0 && current.isExpanded) {
           nextId = current.children[Math.floor(current.children.length / 2)];
       } else {
-          // Geometric navigation for Up/Down or Sibling navigation
-          // Find closest node in visual direction
+          // Geometric navigation
           const cx = current.x || 0;
           const cy = current.y || 0;
           
@@ -122,7 +123,7 @@ function App() {
               let valid = false;
               if (direction === 'up') valid = dy < -10 && Math.abs(dx) < 100;
               if (direction === 'down') valid = dy > 10 && Math.abs(dx) < 100;
-              if (direction === 'right') valid = dx > 10; // Fallback if no children
+              if (direction === 'right') valid = dx > 10; 
 
               if(valid) {
                   const dist = Math.sqrt(dx*dx + dy*dy);
@@ -151,11 +152,10 @@ function App() {
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    // Only pan if clicking on background (target is the svg itself)
     if ((e.target as Element).tagName === 'svg' || (e.target as Element).id === 'canvas-bg') {
         setIsPanning(true);
         setLastMousePos({ x: e.clientX, y: e.clientY });
-        setSelectedId(null); // Deselect on background click
+        setSelectedId(null); 
     }
   };
 
@@ -172,18 +172,13 @@ function App() {
     setIsPanning(false);
   };
 
-  // Canvas Control Handlers
   const handleZoomIn = () => setViewport(prev => ({ ...prev, scale: Math.min(prev.scale * 1.2, 5) }));
   const handleZoomOut = () => setViewport(prev => ({ ...prev, scale: Math.max(prev.scale / 1.2, 0.1) }));
   
   const handleResetView = useCallback(() => {
-    // Fit to screen logic
     const allNodes = Object.values(nodes) as MindMapNode[];
     const visibleNodes = allNodes.filter(node => {
-        // Must have coordinates
         if (node.x === undefined || node.y === undefined) return false;
-        
-        // Check ancestry for collapsed state
         let current = node;
         while (current.parentId) {
             const parent = nodes[current.parentId];
@@ -205,19 +200,20 @@ function App() {
 
     visibleNodes.forEach(node => {
         if (node.x === undefined || node.y === undefined) return;
-        
         const x = node.x;
         const y = node.y;
+        const nodeW = node.width || MAX_NODE_WIDTH;
+        const nodeH = node.height || MIN_NODE_HEIGHT;
         
-        if (x - NODE_WIDTH / 2 < minX) minX = x - NODE_WIDTH / 2;
-        if (x + NODE_WIDTH / 2 > maxX) maxX = x + NODE_WIDTH / 2;
-        if (y - NODE_HEIGHT / 2 < minY) minY = y - NODE_HEIGHT / 2;
-        if (y + NODE_HEIGHT / 2 > maxY) maxY = y + NODE_HEIGHT / 2;
+        if (x - nodeW / 2 < minX) minX = x - nodeW / 2;
+        if (x + nodeW / 2 > maxX) maxX = x + nodeW / 2;
+        if (y - nodeH / 2 < minY) minY = y - nodeH / 2;
+        if (y + nodeH / 2 > maxY) maxY = y + nodeH / 2;
     });
 
     const padding = 80;
-    const width = Math.max(maxX - minX, NODE_WIDTH);
-    const height = Math.max(maxY - minY, NODE_HEIGHT);
+    const width = Math.max(maxX - minX, 100);
+    const height = Math.max(maxY - minY, 100);
     
     const availableWidth = window.innerWidth - padding * 2;
     const availableHeight = window.innerHeight - padding * 2;
@@ -225,16 +221,13 @@ function App() {
     const scaleX = availableWidth / width;
     const scaleY = availableHeight / height;
     
-    // Choose the smaller scale to fit both dimensions, clamped for usability
     let fitScale = Math.min(scaleX, scaleY);
-    fitScale = Math.min(fitScale, 1.2); // Don't zoom in too much
-    fitScale = Math.max(fitScale, 0.2); // Don't zoom out too much
+    fitScale = Math.min(fitScale, 1.2); 
+    fitScale = Math.max(fitScale, 0.2); 
 
     const centerX = minX + width / 2;
     const centerY = minY + height / 2;
 
-    // Calculate viewport position to center the content
-    // viewportX + centerX * scale = screenWidth / 2
     const newX = (window.innerWidth / 2) - (centerX * fitScale);
     const newY = (window.innerHeight / 2) - (centerY * fitScale);
 
@@ -273,7 +266,6 @@ function App() {
             xmlns="http://www.w3.org/2000/svg"
         >
           <g transform={`translate(${viewport.x}, ${viewport.y}) scale(${viewport.scale})`}>
-            {/* Render Edges first so they are behind nodes */}
             {(Object.values(nodes) as MindMapNode[]).map(node => node.parentId && nodes[node.parentId] && (
                nodes[node.parentId].isExpanded && (
                 <MindMapEdge 
@@ -285,9 +277,7 @@ function App() {
                )
             ))}
 
-            {/* Render Nodes */}
             {(Object.values(nodes) as MindMapNode[]).map(node => (
-               // Simple visibility check based on parent expansion
                (!node.parentId || (nodes[node.parentId] && nodes[node.parentId].isExpanded && nodes[node.parentId].x !== undefined)) && (
                 <MindMapNodeComponent 
                     key={node.id}
@@ -297,8 +287,10 @@ function App() {
                     isEditing={editingId === node.id}
                     onSelect={setSelectedId}
                     onEditStart={setEditingId}
+                    onEditChange={updateDraft}
                     onEditEnd={(id, text) => {
-                        updateNodeText(id, text);
+                        updateNodeText(id, text); // Commit to history
+                        updateDraft(id, null); // Clear draft
                         setEditingId(null);
                     }}
                     onToggleCollapse={toggleCollapse}
