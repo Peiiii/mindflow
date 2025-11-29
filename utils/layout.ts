@@ -71,7 +71,20 @@ const calculateNodeDimensions = (text: string) => {
 };
 
 export const computeLayout = (data: MindMapData, drafts?: Record<string, string>): Record<string, MindMapNode> => {
-  const nodes = { ...data.nodes };
+  // Initialize nodes map with cleared layout properties.
+  // This ensures that any node not visited during the layout traversal (because an ancestor is collapsed)
+  // has undefined coordinates, preventing it from rendering with stale data.
+  const nodes: Record<string, MindMapNode> = {};
+  
+  Object.values(data.nodes).forEach(node => {
+    nodes[node.id] = {
+      ...node,
+      x: undefined,
+      y: undefined,
+      width: undefined,
+      height: undefined
+    };
+  });
   
   // Apply drafts if any
   if (drafts) {
