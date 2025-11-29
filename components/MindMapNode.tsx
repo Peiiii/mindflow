@@ -82,7 +82,7 @@ export const MindMapNodeComponent: React.FC<Props> = ({
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
     overflowWrap: 'break-word',
-    textAlign: 'center',
+    textAlign: 'left',
   };
 
   return (
