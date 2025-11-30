@@ -18,7 +18,6 @@ interface Props {
   onToggleCollapse: (id: string) => void;
   onAddChild: (id: string) => void;
   onMouseDown: (e: React.MouseEvent, id: string) => void;
-  onMouseMove?: (e: React.MouseEvent, id: string) => void;
 }
 
 export const MindMapNodeComponent: React.FC<Props> = ({
@@ -35,8 +34,7 @@ export const MindMapNodeComponent: React.FC<Props> = ({
   onEditEnd,
   onToggleCollapse,
   onAddChild,
-  onMouseDown,
-  onMouseMove
+  onMouseDown
 }) => {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const styles = THEMES[theme];
@@ -100,11 +98,8 @@ export const MindMapNodeComponent: React.FC<Props> = ({
         onEditStart(node.id);
       }}
       onMouseDown={(e) => {
-        // Prevent drag start if clicking buttons
+        e.stopPropagation(); // 关键修复：阻止事件冒泡到画布
         onMouseDown(e, node.id);
-      }}
-      onMouseMove={(e) => {
-        if (onMouseMove) onMouseMove(e, node.id);
       }}
     >
       {/* Drop Indicators - Before/After */}
