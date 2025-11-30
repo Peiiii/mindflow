@@ -37,6 +37,8 @@ export interface HistoryState {
   future: MindMapData[];
 }
 
+export type DropPosition = 'before' | 'after' | 'inside';
+
 export enum ThemeMode {
   LIGHT = 'LIGHT',
   DARK = 'DARK',

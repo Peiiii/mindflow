@@ -41,3 +41,42 @@ export const MindMapEdge: React.FC<Props> = ({ source, target, theme }) => {
     />
   );
 };
+
+interface PreviewProps {
+  source: MindMapNode;
+  targetX: number;
+  targetY: number;
+  theme: ThemeMode;
+}
+
+export const PreviewEdge: React.FC<PreviewProps> = ({ source, targetX, targetY, theme }) => {
+  if (source.x === undefined || source.y === undefined) return null;
+
+  const styles = THEMES[theme];
+  const sourceWidth = source.width || MIN_NODE_WIDTH;
+
+  const startX = source.x + sourceWidth / 2;
+  const startY = source.y;
+  
+  // Calculate control points for a smooth S-curve to the mouse position
+  // Assuming Left-to-Right flow
+  const dist = targetX - startX;
+  const controlPointOffset = Math.max(dist / 2, 40); // Ensure minimal curve even if close
+  
+  const pathData = `
+    M ${startX} ${startY}
+    C ${startX + controlPointOffset} ${startY},
+      ${targetX - controlPointOffset} ${targetY},
+      ${targetX} ${targetY}
+  `;
+
+  return (
+    <path
+      d={pathData}
+      fill="none"
+      strokeWidth="2"
+      strokeDasharray="5,5"
+      className={`${styles.highlight} opacity-60 pointer-events-none`}
+    />
+  );
+};

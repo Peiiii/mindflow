@@ -1,6 +1,6 @@
 
 import React, { useRef, useEffect } from 'react';
-import { MindMapNode, ThemeMode, THEMES } from '../types';
+import { MindMapNode, ThemeMode, THEMES, DropPosition } from '../types';
 import { MIN_NODE_HEIGHT, MIN_NODE_WIDTH, NODE_STYLES } from '../constants';
 
 interface Props {
@@ -8,12 +8,17 @@ interface Props {
   theme: ThemeMode;
   isSelected: boolean;
   isEditing: boolean;
+  isDragging?: boolean;
+  isDropTarget?: boolean;
+  dropPosition?: DropPosition | null;
   onSelect: (id: string) => void;
   onEditStart: (id: string) => void;
   onEditChange: (id: string, text: string) => void;
   onEditEnd: (id: string, text: string) => void;
   onToggleCollapse: (id: string) => void;
   onAddChild: (id: string) => void;
+  onMouseDown: (e: React.MouseEvent, id: string) => void;
+  onMouseMove?: (e: React.MouseEvent, id: string) => void;
 }
 
 export const MindMapNodeComponent: React.FC<Props> = ({
@@ -21,12 +26,17 @@ export const MindMapNodeComponent: React.FC<Props> = ({
   theme,
   isSelected,
   isEditing,
+  isDragging,
+  isDropTarget,
+  dropPosition,
   onSelect,
   onEditStart,
   onEditChange,
   onEditEnd,
   onToggleCollapse,
-  onAddChild
+  onAddChild,
+  onMouseDown,
+  onMouseMove
 }) => {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const styles = THEMES[theme];
@@ -38,16 +48,9 @@ export const MindMapNodeComponent: React.FC<Props> = ({
   useEffect(() => {
     if (isEditing && inputRef.current) {
       inputRef.current.focus();
-      // Only select all on initial focus to avoid interrupting typing
-      // We can check if selectionStart is 0 and value equals node.text to guess it's initial
-      // But for simplicity, we'll just focus. 
-      // If we want select all on start, we need a flag or logic.
-      // Usually users expect cursor at end or selected all. 
-      // Since we re-render on every keystroke, we rely on React to keep focus.
     }
   }, [isEditing]);
   
-  // When entering edit mode, select text
   useEffect(() => {
     if (isEditing && inputRef.current) {
         inputRef.current.select();
@@ -55,24 +58,18 @@ export const MindMapNodeComponent: React.FC<Props> = ({
   }, [isEditing]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Enter to save, Shift+Enter for new line
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       onEditEnd(node.id, node.text);
     }
     if (e.key === 'Escape') {
-      // Revert is complex here because we've been updating draft.
-      // Ideally we should have an onCancel that reverts draft.
-      // For now, commit current state or we can pass original text?
-      // Let's just commit.
       onEditEnd(node.id, node.text);
     }
-    e.stopPropagation(); // Prevent canvas shortcuts
+    e.stopPropagation(); 
   };
 
   const hasChildren = node.children && node.children.length > 0;
 
-  // Shared text styles
   const textStyle: React.CSSProperties = {
     fontFamily: NODE_STYLES.fontFamily,
     fontSize: NODE_STYLES.fontSize,
@@ -85,10 +82,15 @@ export const MindMapNodeComponent: React.FC<Props> = ({
     textAlign: 'left',
   };
 
+  const isInsideDrop = isDropTarget && dropPosition === 'inside';
+
   return (
     <g
       transform={`translate(${node.x}, ${node.y})`}
-      className="transition-transform duration-300 ease-in-out cursor-pointer group"
+      className={`
+        transition-transform duration-300 ease-in-out cursor-pointer group
+        ${isDragging ? 'opacity-50 grayscale' : ''}
+      `}
       onClick={(e) => {
         e.stopPropagation();
         onSelect(node.id);
@@ -97,7 +99,37 @@ export const MindMapNodeComponent: React.FC<Props> = ({
         e.stopPropagation();
         onEditStart(node.id);
       }}
+      onMouseDown={(e) => {
+        // Prevent drag start if clicking buttons
+        onMouseDown(e, node.id);
+      }}
+      onMouseMove={(e) => {
+        if (onMouseMove) onMouseMove(e, node.id);
+      }}
     >
+      {/* Drop Indicators - Before/After */}
+      {isDropTarget && dropPosition === 'before' && (
+        <rect
+          x={-width / 2}
+          y={-height / 2 - 8}
+          width={width}
+          height={4}
+          rx={2}
+          className={`${styles.highlight} fill-current`}
+        />
+      )}
+      
+      {isDropTarget && dropPosition === 'after' && (
+        <rect
+          x={-width / 2}
+          y={height / 2 + 4}
+          width={width}
+          height={4}
+          rx={2}
+          className={`${styles.highlight} fill-current`}
+        />
+      )}
+
       {/* Node Background */}
       <rect
         x={-width / 2}
@@ -107,10 +139,12 @@ export const MindMapNodeComponent: React.FC<Props> = ({
         rx={8}
         className={`
           ${styles.nodeBg} 
-          ${isSelected ? `stroke-2 ${styles.highlight}` : `stroke-1 stroke-slate-200 dark:stroke-slate-700`}
+          ${(isSelected || isInsideDrop) ? `stroke-2 ${styles.highlight}` : `stroke-1 stroke-slate-200 dark:stroke-slate-700`}
+          ${isInsideDrop ? 'stroke-dashed' : ''} 
           shadow-sm
           transition-all duration-200
         `}
+        strokeDasharray={isInsideDrop ? "5,5" : "0"}
       />
 
       {/* Content */}
@@ -132,9 +166,9 @@ export const MindMapNodeComponent: React.FC<Props> = ({
                className="pointer-events-auto w-full h-full bg-transparent resize-none outline-none text-slate-800 dark:text-white border-0 m-0 overflow-hidden"
                style={{ 
                    ...textStyle,
-                   // Reset defaults
                    margin: 0,
                 }}
+                onMouseDown={(e) => e.stopPropagation()} // Allow text selection
              />
           ) : (
             <div 
@@ -155,6 +189,7 @@ export const MindMapNodeComponent: React.FC<Props> = ({
             e.stopPropagation();
             onToggleCollapse(node.id);
           }}
+          onMouseDown={(e) => e.stopPropagation()}
           className="opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
         >
           <circle r="8" className="fill-white dark:fill-slate-800 stroke-slate-300 dark:stroke-slate-600" />
@@ -175,6 +210,7 @@ export const MindMapNodeComponent: React.FC<Props> = ({
               e.stopPropagation();
               onAddChild(node.id);
           }}
+          onMouseDown={(e) => e.stopPropagation()}
           className={`opacity-0 ${isSelected ? 'opacity-100' : 'group-hover:opacity-50'} transition-opacity cursor-pointer`}
       >
            <circle r="8" className="fill-blue-500 stroke-none" />

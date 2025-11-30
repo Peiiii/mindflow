@@ -1,6 +1,6 @@
 
 import { useState, useCallback, useMemo } from 'react';
-import { MindMapData, MindMapNode, NodeId, HistoryState } from '../types';
+import { MindMapData, MindMapNode, NodeId, HistoryState, DropPosition } from '../types';
 import { INITIAL_DATA } from '../constants';
 import { computeLayout } from '../utils/layout';
 
@@ -152,12 +152,62 @@ export const useMindMap = () => {
       children: newNodes[parentId].children.filter(childId => childId !== id)
     };
 
-    // Recursively delete children (simple approach: just remove references, GC handles rest or cleanup later)
-    // For a cleaner approach, strictly we should remove keys, but keeping it simple for now.
     delete newNodes[id];
 
     pushState({ ...history.present, nodes: newNodes });
     setSelectedId(parentId);
+  }, [history.present, pushState]);
+
+  const moveNode = useCallback((dragId: NodeId, targetId: NodeId, position: DropPosition) => {
+    if (dragId === targetId) return;
+    const nodes = history.present.nodes;
+    const dragNode = nodes[dragId];
+    const targetNode = nodes[targetId];
+    
+    if (!dragNode || !targetNode || !dragNode.parentId) return;
+
+    // Cycle detection: Cannot move a node into its own descendant
+    let current = targetNode;
+    while (current.parentId) {
+      if (current.id === dragId) return; // Target is inside dragNode
+      current = nodes[current.parentId];
+    }
+    if (current.id === dragId) return; // Root Check if needed, though loop covers it
+
+    const newNodes = { ...nodes };
+    const oldParentId = dragNode.parentId;
+    
+    // 1. Remove from old parent
+    newNodes[oldParentId] = {
+      ...newNodes[oldParentId],
+      children: newNodes[oldParentId].children.filter(id => id !== dragId)
+    };
+
+    // 2. Add to new location
+    if (position === 'inside') {
+      newNodes[targetId] = {
+        ...newNodes[targetId],
+        children: [...newNodes[targetId].children, dragId],
+        isExpanded: true
+      };
+      newNodes[dragId] = { ...newNodes[dragId], parentId: targetId };
+    } else {
+      // Before or After sibling
+      const newParentId = targetNode.parentId;
+      if (!newParentId) return; // Cannot move next to root if root has no parent (root is root)
+
+      const parent = newNodes[newParentId];
+      const targetIndex = parent.children.indexOf(targetId);
+      const newChildren = [...parent.children];
+      
+      const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+      newChildren.splice(insertIndex, 0, dragId);
+
+      newNodes[newParentId] = { ...parent, children: newChildren };
+      newNodes[dragId] = { ...newNodes[dragId], parentId: newParentId };
+    }
+
+    pushState({ ...history.present, nodes: newNodes });
   }, [history.present, pushState]);
 
   return {
@@ -171,6 +221,7 @@ export const useMindMap = () => {
     addChild,
     addSibling,
     deleteNode,
+    moveNode,
     toggleCollapse,
     undo,
     redo,
